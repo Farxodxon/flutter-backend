@@ -4,8 +4,7 @@ import '../lib/storage/user_storage.dart';
 Future<Response> onRequest(RequestContext context) async {
   switch (context.request.method) {
     case HttpMethod.get:
-      // Barcha foydalanuvchilarni olish
-      final users = UserStorage.getAll();
+      final users = await UserStorage.getAll();
       return Response.json(
         body: {
           'users': users.map((u) => u.toJson()).toList(),
@@ -14,7 +13,6 @@ Future<Response> onRequest(RequestContext context) async {
       );
 
     case HttpMethod.post:
-      // Yangi foydalanuvchi qo'shish (register bilan bir xil)
       try {
         final body = await context.request.json() as Map<String, dynamic>;
         final username = body['username'] as String?;
@@ -28,7 +26,7 @@ Future<Response> onRequest(RequestContext context) async {
           );
         }
 
-        final user = UserStorage.register(username, email, password);
+        final user = await UserStorage.register(username, email, password);
 
         if (user == null) {
           return Response.json(

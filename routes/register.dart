@@ -1,8 +1,9 @@
 import 'package:dart_frog/dart_frog.dart';
 import '../lib/storage/user_storage.dart';
 
-/// Faqat POST so'rovlarni qabul qiladi
 Future<Response> onRequest(RequestContext context) async {
+  print('📥 Register so\'rovi keldi');
+  
   if (context.request.method != HttpMethod.post) {
     return Response.json(
       statusCode: 405,
@@ -12,11 +13,12 @@ Future<Response> onRequest(RequestContext context) async {
 
   try {
     final body = await context.request.json() as Map<String, dynamic>;
+    print('📦 Body: $body');
+    
     final username = body['username'] as String?;
     final email = body['email'] as String?;
     final password = body['password'] as String?;
 
-    // Tekshirish
     if (username == null || email == null || password == null) {
       return Response.json(
         statusCode: 400,
@@ -24,15 +26,7 @@ Future<Response> onRequest(RequestContext context) async {
       );
     }
 
-    if (password.length < 6) {
-      return Response.json(
-        statusCode: 400,
-        body: {'error': 'Parol kamida 6 ta belgidan iborat bo\'lishi kerak'},
-      );
-    }
-
-    // Ro'yxatdan o'tish
-    final user = UserStorage.register(username, email, password);
+    final user = await UserStorage.register(username, email, password);
 
     if (user == null) {
       return Response.json(
@@ -41,7 +35,6 @@ Future<Response> onRequest(RequestContext context) async {
       );
     }
 
-    // Muvaffaqiyatli
     return Response.json(
       statusCode: 201,
       body: {
@@ -49,10 +42,12 @@ Future<Response> onRequest(RequestContext context) async {
         'user': user.toJson(),
       },
     );
-  } catch (e) {
+  } catch (e, stackTrace) {
+    print('❌ Xatolik: $e');
+    print('📍 Stack trace: $stackTrace');
     return Response.json(
       statusCode: 400,
-      body: {'error': 'Noto\'g\'ri JSON format'},
+      body: {'error': 'Noto\'g\'ri JSON format: $e'},
     );
   }
 }

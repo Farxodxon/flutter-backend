@@ -21,7 +21,7 @@ Future<Response> onRequest(RequestContext context) async {
       );
     }
 
-    final user = UserStorage.login(email, password);
+    final user = await UserStorage.login(email, password);
 
     if (user == null) {
       return Response.json(

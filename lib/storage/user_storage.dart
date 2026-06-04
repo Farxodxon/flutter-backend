@@ -1,84 +1,177 @@
+import '../database.dart';
 import '../models/user.dart';
 
 class UserStorage {
-  static final List<User> _users = [];
-  static int _nextId = 1;
-
   // Ro'yxatdan o'tish
-  static User? register(String username, String email, String password) {
-    // Email bandligini tekshirish
-    if (_users.any((u) => u.email == email)) {
-      return null; // Email allaqachon band
+  static Future<User?> register(String username, String email, String password) async {
+    final db = await Database.connect();
+
+    try {
+      // Email bandligini tekshirish
+      final existing = await db.execute(
+        r'SELECT id FROM users WHERE email = $1 OR username = $2',
+        parameters: [email, username],
+      );
+
+      if (existing.affectedRows > 0) {
+        return null;
+      }
+
+      // Yangi foydalanuvchi qo'shish
+      final result = await db.execute(
+        r'''INSERT INTO users (username, email, password) 
+           VALUES ($1, $2, $3) 
+           RETURNING id, username, email, password, created_at''',
+        parameters: [username, email, password],
+      );
+
+      if (result.isEmpty) return null;
+
+      final row = result.first;
+      return User(
+        id: row[0].toString(),
+        username: row[1] as String,
+        email: row[2] as String,
+        password: row[3] as String,
+        createdAt: row[4] as DateTime,
+      );
+    } catch (e) {
+      print('❌ Register xatolik: $e');
+      return null;
     }
-
-    // Username bandligini tekshirish
-    if (_users.any((u) => u.username == username)) {
-      return null; // Username allaqachon band
-    }
-
-    final user = User(
-      id: _nextId.toString(),
-      username: username,
-      email: email,
-      password: password,
-      createdAt: DateTime.now(),
-    );
-
-    _users.add(user);
-    _nextId++;
-    return user;
   }
 
   // Login
-  static User? login(String email, String password) {
+  static Future<User?> login(String email, String password) async {
+    final db = await Database.connect();
+
     try {
-      return _users.firstWhere(
-        (u) => u.email == email && u.password == password,
+      final result = await db.execute(
+        r'SELECT id, username, email, password, created_at FROM users WHERE email = $1 AND password = $2',
+        parameters: [email, password],
+      );
+
+      if (result.isEmpty) return null;
+
+      final row = result.first;
+      return User(
+        id: row[0].toString(),
+        username: row[1] as String,
+        email: row[2] as String,
+        password: row[3] as String,
+        createdAt: row[4] as DateTime,
       );
     } catch (e) {
+      print('❌ Login xatolik: $e');
       return null;
     }
   }
 
-  // Barcha foydalanuvchilarni olish
-  static List<User> getAll() {
-    return List.from(_users);
+  // Barcha foydalanuvchilar
+  static Future<List<User>> getAll() async {
+    final db = await Database.connect();
+
+    try {
+      final result = await db.execute(
+        r'SELECT id, username, email, password, created_at FROM users ORDER BY id',
+      );
+
+      return result.map((row) => User(
+        id: row[0].toString(),
+        username: row[1] as String,
+        email: row[2] as String,
+        password: row[3] as String,
+        createdAt: row[4] as DateTime,
+      )).toList();
+    } catch (e) {
+      print('❌ GetAll xatolik: $e');
+      return [];
+    }
   }
 
-  // ID bo'yicha foydalanuvchini topish
-  static User? getById(String id) {
+  // ID bo'yicha
+  static Future<User?> getById(String id) async {
+    final db = await Database.connect();
+
     try {
-      return _users.firstWhere((u) => u.id == id);
+      final result = await db.execute(
+        r'SELECT id, username, email, password, created_at FROM users WHERE id = $1',
+        parameters: [int.tryParse(id) ?? 0],
+      );
+
+      if (result.isEmpty) return null;
+
+      final row = result.first;
+      return User(
+        id: row[0].toString(),
+        username: row[1] as String,
+        email: row[2] as String,
+        password: row[3] as String,
+        createdAt: row[4] as DateTime,
+      );
     } catch (e) {
+      print('❌ GetById xatolik: $e');
       return null;
     }
   }
 
-  // Foydalanuvchini o'chirish
-  static bool delete(String id) {
-    final user = getById(id);
-    if (user != null) {
-      _users.remove(user);
-      return true;
+  // O'chirish
+  static Future<bool> delete(String id) async {
+    final db = await Database.connect();
+
+    try {
+      final result = await db.execute(
+        r'DELETE FROM users WHERE id = $1',
+        parameters: [int.tryParse(id) ?? 0],
+      );
+      return result.affectedRows > 0;
+    } catch (e) {
+      print('❌ Delete xatolik: $e');
+      return false;
     }
-    return false;
   }
 
-  // Foydalanuvchini yangilash
-  static User? update(String id, {String? username, String? email}) {
-    final user = getById(id);
-    if (user != null) {
-      final updatedUser = User(
-        id: user.id,
-        username: username ?? user.username,
-        email: email ?? user.email,
-        password: user.password,
-        createdAt: user.createdAt,
+  // Yangilash
+  static Future<User?> update(String id, {String? username, String? email}) async {
+    final db = await Database.connect();
+
+    try {
+      final params = <dynamic>[];
+      final setParts = <String>[];
+      var paramCount = 1;
+
+      if (username != null) {
+        setParts.add('username = \$${paramCount++}');
+        params.add(username);
+      }
+      if (email != null) {
+        setParts.add('email = \$${paramCount++}');
+        params.add(email);
+      }
+
+      if (setParts.isEmpty) return null;
+
+      params.add(int.tryParse(id) ?? 0);
+      final whereParam = paramCount;
+
+      final result = await db.execute(
+        'UPDATE users SET ${setParts.join(', ')} WHERE id = \$$whereParam RETURNING id, username, email, password, created_at',
+        parameters: params,
       );
-      final index = _users.indexOf(user);
-      _users[index] = updatedUser;
-      return updatedUser;
+
+      if (result.isEmpty) return null;
+
+      final row = result.first;
+      return User(
+        id: row[0].toString(),
+        username: row[1] as String,
+        email: row[2] as String,
+        password: row[3] as String,
+        createdAt: row[4] as DateTime,
+      );
+    } catch (e) {
+      print('❌ Update xatolik: $e');
+      return null;
     }
-    return null;
   }
 }
