@@ -1,0 +1,5 @@
+targets:
+  $default:
+    builders:
+      dart_frog_gen:
+        enabled: true
