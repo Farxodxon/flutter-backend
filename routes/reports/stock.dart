@@ -1,5 +1,5 @@
 import 'package:dart_frog/dart_frog.dart';
-import '../../lib/database.dart';
+import 'package:my_server/database.dart';
 
 Future<Response> onRequest(RequestContext context) async {
   if (context.request.method != HttpMethod.get) {

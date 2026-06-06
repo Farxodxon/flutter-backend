@@ -1,12 +1,16 @@
 import 'package:dart_frog/dart_frog.dart';
-import '../lib/database.dart';
+import 'package:my_server/database.dart';
 
 Future<Response> onRequest(RequestContext context) async {
   switch (context.request.method) {
     case HttpMethod.get:
       return _getCategories();
     case HttpMethod.post:
-      return _createCategory(await context.request.json());
+      final jsonBody = await context.request.json();
+      if (jsonBody is! Map<String, dynamic>) {
+        return Response.json(statusCode: 400, body: {'error': 'Invalid JSON body'});
+      }
+      return _createCategory(jsonBody);
     default:
       return Response.json(statusCode: 405, body: {'error': 'Method not allowed'});
   }

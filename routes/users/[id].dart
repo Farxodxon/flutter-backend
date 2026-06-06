@@ -1,5 +1,5 @@
 import 'package:dart_frog/dart_frog.dart';
-import '../../lib/storage/user_storage.dart';
+import 'package:my_server/storage/user_storage.dart';
 
 Future<Response> onRequest(RequestContext context, String id) async {
   switch (context.request.method) {
