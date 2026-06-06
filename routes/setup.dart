@@ -11,29 +11,24 @@ Future<Response> onRequest(RequestContext context) async {
     final username = body['username'] as String?;
     final email = body['email'] as String?;
     final password = body['password'] as String?;
-    final role = body['role'] as String? ?? 'employee';
-    final factoryId = body['factory_id'] as int?;
-    final createdBy = body['created_by'] as int?;
+    final secretKey = body['secret_key'] as String?;
 
-    if (username == null || email == null || password == null || createdBy == null) {
-      return Response.json(statusCode: 400, body: {'error': 'username, email, password, created_by majburiy'});
+    if (secretKey != 'factory_hub_2026_secret') {
+      return Response.json(statusCode: 403, body: {'error': 'Maxfiy kalit noto\'g\'ri'});
     }
 
-    final user = await UserStorage.createUser(
-      username: username,
-      email: email,
-      password: password,
-      role: role,
-      factoryId: factoryId,
-      createdBy: createdBy,
-    );
+    if (username == null || email == null || password == null) {
+      return Response.json(statusCode: 400, body: {'error': 'username, email, password majburiy'});
+    }
+
+    final user = await UserStorage.createSuperAdmin(username, email, password);
 
     if (user == null) {
-      return Response.json(statusCode: 409, body: {'error': 'Email yoki username band yoki yaratib bo\'lmadi'});
+      return Response.json(statusCode: 409, body: {'error': 'Super admin allaqachon mavjud yoki yaratib bo\'lmadi'});
     }
 
     return Response.json(statusCode: 201, body: {
-      'message': 'Foydalanuvchi yaratildi',
+      'message': 'Super admin yaratildi',
       'user': user.toJson(),
     });
   } catch (e) {
