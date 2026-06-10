@@ -16,3 +16,7 @@ build/
 coverage/.dart_tool/
 build/
 .pub-cache/
+
+.env
+.env.*
+*.env
