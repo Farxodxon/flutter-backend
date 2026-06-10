@@ -8,12 +8,7 @@ Future<Response> onRequest(RequestContext context) async {
   }
 
   try {
-    final parsed = await context.request.json();
-    if (parsed is! Map<String, dynamic>) {
-      return Response.json(statusCode: 400, body: {'error': 'JSON obyekt kutilgan'});
-    }
-    final body = parsed;
-
+    final body = await context.request.json() as Map<String, dynamic>;
     final email = body['email'] as String?;
     final password = body['password'] as String?;
 
@@ -27,12 +22,15 @@ Future<Response> onRequest(RequestContext context) async {
     }
 
     final token = JwtService.generateToken(
-      userId: int.parse(user.id), email: user.email, role: user.role,
-      factoryId: user.factoryId != null ? int.tryParse(user.factoryId!) : null,
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      factoryId: user.factoryId,
     );
 
     return Response.json(body: {
-      'message': 'Muvaffaqiyatli kirish', 'token': token,
+      'message': 'Muvaffaqiyatli kirish',
+      'token': token,
       'user': user.toJson(),
     });
   } catch (e) {
