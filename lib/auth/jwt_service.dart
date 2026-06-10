@@ -1,10 +1,17 @@
+import 'dart:io';
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
 
 class JwtService {
-  static const String _secret = 'factory_hub_2026_super_secret_key_change_in_production';
+  static String get _secret {
+    final secret = Platform.environment['JWT_SECRET'];
+    if (secret == null || secret.isEmpty) {
+      throw Exception('JWT_SECRET environment variable sozlanmagan!');
+    }
+    return secret;
+  }
+
   static const Duration _expiry = Duration(hours: 24);
 
-  /// Token yaratish
   static String generateToken({
     required int userId,
     required String email,
@@ -23,7 +30,6 @@ class JwtService {
     return jwt.sign(SecretKey(_secret));
   }
 
-  /// Tokenni tekshirish
   static Map<String, dynamic>? verifyToken(String token) {
     try {
       final jwt = JWT.verify(token, SecretKey(_secret));
@@ -33,7 +39,6 @@ class JwtService {
     }
   }
 
-  /// Token ichidan user ma'lumotini olish
   static Map<String, dynamic>? getUserFromToken(String? authHeader) {
     if (authHeader == null || !authHeader.startsWith('Bearer ')) {
       return null;

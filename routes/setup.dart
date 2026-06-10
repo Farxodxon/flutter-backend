@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dart_frog/dart_frog.dart';
 import 'package:my_server/storage/user_storage.dart';
 
@@ -18,7 +19,7 @@ Future<Response> onRequest(RequestContext context) async {
     final password = body['password'] as String?;
     final secretKey = body['secret_key'] as String?;
 
-    if (secretKey != 'factory_hub_2026_secret') {
+    if (secretKey != Platform.environment['SETUP_SECRET_KEY']) {
       return Response.json(statusCode: 403, body: {'error': 'Maxfiy kalit noto\'g\'ri'});
     }
 
