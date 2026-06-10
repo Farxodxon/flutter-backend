@@ -1,3 +1,4 @@
+import 'package:bcrypt/bcrypt.dart';
 import 'package:my_server/database.dart';
 import 'package:my_server/models/user.dart';
 
@@ -7,10 +8,32 @@ class UserStorage {
     final db = await Database.connect();
     try {
       final result = await db.execute(
-        r'SELECT id, username, email, password, COALESCE(role, $$employee$$), factory_id, created_at FROM users WHERE email = $1 AND password = $2',
-        parameters: [email, password],
+        r'SELECT id, username, email, password, COALESCE(role, $$employee$$), factory_id, created_at FROM users WHERE email = $1',
+        parameters: [email],
       );
       if (result.isEmpty) return null;
+
+      final storedPassword = result.first[3] as String;
+
+      // bcrypt hash tekshirish, agar oddiy matn bo'lsa ham tekshirish
+      bool passwordMatch = false;
+      if (storedPassword.startsWith('\$2')) {
+        // bcrypt hash
+        passwordMatch = BCrypt.checkpw(password, storedPassword);
+      } else {
+        // Eski oddiy matn (migration davri uchun)
+        passwordMatch = storedPassword == password;
+        if (passwordMatch) {
+          // Darhol hash qilib yangilash
+          final hashed = BCrypt.hashpw(password, BCrypt.gensalt());
+          await db.execute(
+            r'UPDATE users SET password = $1 WHERE email = $2',
+            parameters: [hashed, email],
+          );
+        }
+      }
+
+      if (!passwordMatch) return null;
       return _rowToUser(result.first);
     } catch (e) {
       print('Login xatosi: $e');
@@ -19,14 +42,19 @@ class UserStorage {
   }
 
   // ========== SUPER ADMIN ==========
-  static Future<User?> createSuperAdmin(String username, String email, String password) async {
+  static Future<User?> createSuperAdmin(
+      String username, String email, String password) async {
     final db = await Database.connect();
     try {
-      final existing = await db.execute(r"SELECT id FROM users WHERE role = 'super_admin'");
+      final existing =
+          await db.execute(r"SELECT id FROM users WHERE role = 'super_admin'");
       if (existing.affectedRows > 0) return null;
+
+      final hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
+
       final result = await db.execute(
         r"INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, 'super_admin') RETURNING id, username, email, password, role, factory_id, created_at",
-        parameters: [username, email, password],
+        parameters: [username, email, hashedPassword],
       );
       return _rowToUser(result.first);
     } catch (e) {
@@ -37,108 +65,147 @@ class UserStorage {
 
   // ========== CREATE USER ==========
   static Future<User?> createUser({
-    required String username, required String email, required String password,
-    required String role, int? factoryId, required int createdBy,
+    required String username,
+    required String email,
+    required String password,
+    required String role,
+    int? factoryId,
   }) async {
     final db = await Database.connect();
     try {
+      // Email band emasligini tekshirish
       final existing = await db.execute(
-        r'SELECT id FROM users WHERE email = $1 OR username = $2',
-        parameters: [email, username],
+        r'SELECT id FROM users WHERE email = $1',
+        parameters: [email],
       );
-      if (existing.affectedRows > 0) return null;
+      if (existing.isNotEmpty) return null;
+
+      final hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
+
       final result = await db.execute(
         r'INSERT INTO users (username, email, password, role, factory_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, password, role, factory_id, created_at',
-        parameters: [username, email, password, role, factoryId],
+        parameters: [username, email, hashedPassword, role, factoryId],
       );
       return _rowToUser(result.first);
     } catch (e) {
-      print('Create user xatosi: $e');
+      print('createUser xatosi: $e');
       return null;
     }
   }
 
-  // ========== REGISTER ==========
-  static Future<User?> register(String username, String email, String password) async {
-    return createUser(username: username, email: email, password: password, role: 'employee', factoryId: null, createdBy: 0);
-  }
-
   // ========== GET ALL ==========
-  static Future<List<User>> getAll() async {
+  static Future<List<User>> getAll({String? role, int? factoryId}) async {
     final db = await Database.connect();
     try {
-      final result = await db.execute(
-        r'SELECT id, username, email, password, COALESCE(role, $$employee$$), factory_id, created_at FROM users ORDER BY id',
-      );
-      return result.map((row) => _rowToUser(row)).toList();
+      String query =
+          r'SELECT id, username, email, password, COALESCE(role, $$employee$$), factory_id, created_at FROM users WHERE 1=1';
+      final params = <dynamic>[];
+      var idx = 1;
+
+      if (role != null) {
+        query += ' AND role = \$$idx';
+        params.add(role);
+        idx++;
+      }
+      if (factoryId != null) {
+        query += ' AND factory_id = \$$idx';
+        params.add(factoryId);
+        idx++;
+      }
+      query += ' ORDER BY id';
+
+      final result = params.isEmpty
+          ? await db.execute(query)
+          : await db.execute(query, parameters: params);
+
+      return result.map(_rowToUser).toList();
     } catch (e) {
-      print('GetAll xatosi: $e');
+      print('getAll xatosi: $e');
       return [];
     }
   }
 
   // ========== GET BY ID ==========
-  static Future<User?> getById(String id) async {
+  static Future<User?> getById(int id) async {
     final db = await Database.connect();
     try {
       final result = await db.execute(
         r'SELECT id, username, email, password, COALESCE(role, $$employee$$), factory_id, created_at FROM users WHERE id = $1',
-        parameters: [int.tryParse(id) ?? 0],
+        parameters: [id],
       );
       if (result.isEmpty) return null;
       return _rowToUser(result.first);
     } catch (e) {
-      print('GetById xatosi: $e');
       return null;
     }
   }
 
   // ========== UPDATE ==========
-  static Future<User?> update(String id, {String? username, String? email}) async {
+  static Future<User?> update(
+    int id, {
+    String? username,
+    String? email,
+    String? password,
+    String? role,
+    int? factoryId,
+    bool? isActive,
+  }) async {
     final db = await Database.connect();
     try {
-      final updates = <String>[];
+      final setParts = <String>[];
       final params = <dynamic>[];
       var idx = 1;
-      if (username != null) { updates.add('username = \$${idx++}'); params.add(username); }
-      if (email != null) { updates.add('email = \$${idx++}'); params.add(email); }
-      if (updates.isEmpty) return null;
-      params.add(int.tryParse(id) ?? 0);
+
+      if (username != null) {
+        setParts.add('username = \$$idx');
+        params.add(username);
+        idx++;
+      }
+      if (email != null) {
+        setParts.add('email = \$$idx');
+        params.add(email);
+        idx++;
+      }
+      if (password != null) {
+        final hashed = BCrypt.hashpw(password, BCrypt.gensalt());
+        setParts.add('password = \$$idx');
+        params.add(hashed);
+        idx++;
+      }
+      if (role != null) {
+        setParts.add('role = \$$idx');
+        params.add(role);
+        idx++;
+      }
+      if (factoryId != null) {
+        setParts.add('factory_id = \$$idx');
+        params.add(factoryId);
+        idx++;
+      }
+
+      if (setParts.isEmpty) return null;
+      params.add(id);
+
       final result = await db.execute(
-        'UPDATE users SET ${updates.join(', ')} WHERE id = \$${idx} RETURNING id, username, email, password, COALESCE(role, \'employee\'), factory_id, created_at',
+        'UPDATE users SET ${setParts.join(', ')} WHERE id = \$$idx RETURNING id, username, email, password, COALESCE(role, \'employee\'), factory_id, created_at',
         parameters: params,
       );
+
       if (result.isEmpty) return null;
       return _rowToUser(result.first);
     } catch (e) {
-      print('Update xatosi: $e');
       return null;
     }
   }
 
-  // ========== DELETE ==========
-  static Future<bool> delete(String id) async {
-    final db = await Database.connect();
-    try {
-      final result = await db.execute(
-        r'DELETE FROM users WHERE id = $1 AND role != $$super_admin$$',
-        parameters: [int.tryParse(id) ?? 0],
-      );
-      return result.affectedRows > 0;
-    } catch (e) {
-      print('Delete xatosi: $e');
-      return false;
-    }
-  }
-
+  // ========== HELPER ==========
   static User _rowToUser(dynamic row) {
     return User(
-      id: row[0].toString(),
+      id: int.parse(row[0].toString()),
       username: row[1] as String,
       email: row[2] as String,
-      password: row[3] as String,
-      role: row[4] as String? ?? 'employee',
-      factoryId: row[5]?.toString(),
+      role: row[4] as String,
+      factoryId: row[5] as int?,
       createdAt: row[6] as DateTime,
     );
   }
