@@ -4,6 +4,7 @@ class User {
   final String email;
   final String role;
   final int? factoryId;
+  final bool isActive;
   final DateTime createdAt;
 
   User({
@@ -12,6 +13,7 @@ class User {
     required this.email,
     required this.role,
     this.factoryId,
+    this.isActive = true,
     required this.createdAt,
   });
 
@@ -26,6 +28,7 @@ class User {
       'email': email,
       'role': role,
       'factoryId': factoryId,
+      'isActive': isActive,
       'createdAt': createdAt.toIso8601String(),
     };
   }

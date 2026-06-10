@@ -3,31 +3,29 @@ import 'package:my_server/database.dart';
 import 'package:my_server/models/user.dart';
 
 class UserStorage {
+  static const String _select =
+      'SELECT id, username, email, COALESCE(role, \'employee\'), factory_id, COALESCE(is_active, true), created_at FROM users';
+
   // ========== LOGIN ==========
   static Future<User?> login(String email, String password) async {
     final db = await Database.connect();
     try {
       final result = await db.execute(
-        r'SELECT id, username, email, password, COALESCE(role, $$employee$$), factory_id, created_at FROM users WHERE email = $1',
+        'SELECT id, username, email, COALESCE(role, \'employee\'), factory_id, COALESCE(is_active, true), created_at, password FROM users WHERE email = \$1',
         parameters: [email],
       );
       if (result.isEmpty) return null;
 
-      final storedPassword = result.first[3] as String;
-
-      // bcrypt hash tekshirish, agar oddiy matn bo'lsa ham tekshirish
+      final storedPassword = result.first[7] as String;
       bool passwordMatch = false;
       if (storedPassword.startsWith('\$2')) {
-        // bcrypt hash
         passwordMatch = BCrypt.checkpw(password, storedPassword);
       } else {
-        // Eski oddiy matn (migration davri uchun)
         passwordMatch = storedPassword == password;
         if (passwordMatch) {
-          // Darhol hash qilib yangilash
           final hashed = BCrypt.hashpw(password, BCrypt.gensalt());
           await db.execute(
-            r'UPDATE users SET password = $1 WHERE email = $2',
+            'UPDATE users SET password = \$1 WHERE email = \$2',
             parameters: [hashed, email],
           );
         }
@@ -47,13 +45,12 @@ class UserStorage {
     final db = await Database.connect();
     try {
       final existing =
-          await db.execute(r"SELECT id FROM users WHERE role = 'super_admin'");
-      if (existing.affectedRows > 0) return null;
+          await db.execute('SELECT id FROM users WHERE role = \'super_admin\'');
+      if (existing.isNotEmpty) return null;
 
       final hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
-
       final result = await db.execute(
-        r"INSERT INTO users (username, email, password, role) VALUES ($1, $2, $3, 'super_admin') RETURNING id, username, email, password, role, factory_id, created_at",
+        'INSERT INTO users (username, email, password, role) VALUES (\$1, \$2, \$3, \'super_admin\') RETURNING id, username, email, role, factory_id, COALESCE(is_active, true), created_at',
         parameters: [username, email, hashedPassword],
       );
       return _rowToUser(result.first);
@@ -73,17 +70,15 @@ class UserStorage {
   }) async {
     final db = await Database.connect();
     try {
-      // Email band emasligini tekshirish
       final existing = await db.execute(
-        r'SELECT id FROM users WHERE email = $1',
+        'SELECT id FROM users WHERE email = \$1',
         parameters: [email],
       );
       if (existing.isNotEmpty) return null;
 
       final hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt());
-
       final result = await db.execute(
-        r'INSERT INTO users (username, email, password, role, factory_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, username, email, password, role, factory_id, created_at',
+        'INSERT INTO users (username, email, password, role, factory_id) VALUES (\$1, \$2, \$3, \$4, \$5) RETURNING id, username, email, role, factory_id, COALESCE(is_active, true), created_at',
         parameters: [username, email, hashedPassword, role, factoryId],
       );
       return _rowToUser(result.first);
@@ -97,8 +92,7 @@ class UserStorage {
   static Future<List<User>> getAll({String? role, int? factoryId}) async {
     final db = await Database.connect();
     try {
-      String query =
-          r'SELECT id, username, email, password, COALESCE(role, $$employee$$), factory_id, created_at FROM users WHERE 1=1';
+      String query = '$_select WHERE 1=1';
       final params = <dynamic>[];
       var idx = 1;
 
@@ -130,7 +124,7 @@ class UserStorage {
     final db = await Database.connect();
     try {
       final result = await db.execute(
-        r'SELECT id, username, email, password, COALESCE(role, $$employee$$), factory_id, created_at FROM users WHERE id = $1',
+        '$_select WHERE id = \$1',
         parameters: [id],
       );
       if (result.isEmpty) return null;
@@ -148,7 +142,7 @@ class UserStorage {
     String? password,
     String? role,
     int? factoryId,
-    
+    bool? isActive,
   }) async {
     final db = await Database.connect();
     try {
@@ -182,12 +176,17 @@ class UserStorage {
         params.add(factoryId);
         idx++;
       }
+      if (isActive != null) {
+        setParts.add('is_active = \$$idx');
+        params.add(isActive);
+        idx++;
+      }
 
       if (setParts.isEmpty) return null;
       params.add(id);
 
       final result = await db.execute(
-        'UPDATE users SET ${setParts.join(', ')} WHERE id = \$$idx RETURNING id, username, email, password, COALESCE(role, \'employee\'), factory_id, created_at',
+        'UPDATE users SET ${setParts.join(', ')} WHERE id = \$$idx RETURNING id, username, email, COALESCE(role, \'employee\'), factory_id, COALESCE(is_active, true), created_at',
         parameters: params,
       );
 
@@ -204,8 +203,9 @@ class UserStorage {
       id: int.parse(row[0].toString()),
       username: row[1] as String,
       email: row[2] as String,
-      role: row[4] as String,
-      factoryId: row[5] as int?,
+      role: row[3] as String,
+      factoryId: row[4] != null ? int.parse(row[4].toString()) : null,
+      isActive: row[5] as bool? ?? true,
       createdAt: row[6] as DateTime,
     );
   }
