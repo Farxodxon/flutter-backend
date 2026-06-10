@@ -148,7 +148,7 @@ class UserStorage {
     String? password,
     String? role,
     int? factoryId,
-    bool? isActive,
+    
   }) async {
     final db = await Database.connect();
     try {
