@@ -1,52 +1,42 @@
 import 'package:dart_frog/dart_frog.dart';
-import 'package:my_server/storage/user_storage.dart';
+import 'package:my_server/database.dart';
 
 Future<Response> onRequest(RequestContext context) async {
-  final payload = context.read<Map<String, dynamic>>();
-  final callerRole = payload['role'] as String? ?? 'employee';
-
-  if (callerRole == 'employee') {
-    return Response.json(statusCode: 403, body: {'error': 'Ruxsat yo\'q'});
+  if (context.request.method != HttpMethod.get) {
+    return Response.json(
+      statusCode: 405,
+      body: {'error': 'Method not allowed'},
+    );
   }
 
-  switch (context.request.method) {
-    case HttpMethod.get:
-      final users = await UserStorage.getAll();
-      return Response.json(body: {
-        'users': users.map((u) => u.toJson()).toList(),
-        'total': users.length,
-      });
+  final db = await Database.connect();
 
-    case HttpMethod.post:
-      try {
-        final body = await context.request.json() as Map<String, dynamic>;
-        final username = body['username'] as String?;
-        final email = body['email'] as String?;
-        final password = body['password'] as String?;
-        final role = body['role'] as String? ?? 'employee';
-        final factoryId = body['factory_id'] as int?;
+  try {
+    final result = await db.execute(
+      r'''SELECT u.id, u.username, u.email, COALESCE(u.role, 'employee'), 
+         u.factory_id, u.department_id, u.created_at,
+         d.name as department_name
+         FROM users u
+         LEFT JOIN departments d ON u.department_id = d.id
+         ORDER BY u.id''',
+    );
 
-        if (username == null || email == null || password == null) {
-          return Response.json(statusCode: 400, body: {'error': 'username, email, password majburiy'});
-        }
+    final users = result.map((row) => {
+      'id': row[0],
+      'username': row[1],
+      'email': row[2],
+      'role': row[3],
+      'factoryId': row[4],
+      'departmentId': row[5],
+      'createdAt': row[6]?.toString(),
+      'departmentName': row[7],
+    }).toList();
 
-        final user = await UserStorage.createUser(
-          username: username, email: email, password: password,
-          role: role, factoryId: factoryId,
-        );
-
-        if (user == null) {
-          return Response.json(statusCode: 409, body: {'error': 'Email band'});
-        }
-
-        return Response.json(statusCode: 201, body: {
-          'message': 'Foydalanuvchi yaratildi', 'user': user.toJson(),
-        });
-      } catch (e) {
-        return Response.json(statusCode: 400, body: {'error': '$e'});
-      }
-
-    default:
-      return Response.json(statusCode: 405, body: {'error': 'Method not allowed'});
+    return Response.json(body: {'users': users, 'total': users.length});
+  } catch (e) {
+    return Response.json(
+      statusCode: 500,
+      body: {'error': 'Xatolik: $e'},
+    );
   }
 }
