@@ -22,7 +22,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
         final result = await db.execute(
           '''SELECT id, name, type, unit, current_stock, min_stock, max_stock,
              supplier_id, lead_time_days, factory_id, assigned_to, created_at
-             FROM materials WHERE id = $1''',
+             FROM materials WHERE id = \$1''',
           parameters: [materialId],
         );
         if (result.isEmpty) {
@@ -101,7 +101,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
       }
       try {
         final result = await db.execute(
-          'DELETE FROM materials WHERE id = $1 RETURNING id',
+          'DELETE FROM materials WHERE id = \$1 RETURNING id',
           parameters: [materialId],
         );
         if (result.isEmpty) {
