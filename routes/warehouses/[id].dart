@@ -15,7 +15,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
 
   try {
     final whResult = await db.execute(
-      'SELECT id, name, type, factory_id FROM warehouses WHERE id = \\$1',
+      'SELECT id, name, type, factory_id FROM warehouses WHERE id = \$1',
       parameters: [warehouseId],
     );
     if (whResult.isEmpty) {
@@ -30,8 +30,8 @@ Future<Response> onRequest(RequestContext context, String id) async {
            COALESCE(SUM(CASE WHEN wt.transaction_type = 'in' THEN wt.quantity ELSE 0 END), 0) as total_in,
            COALESCE(SUM(CASE WHEN wt.transaction_type = 'out' THEN wt.quantity ELSE 0 END), 0) as total_out
          FROM materials m
-         LEFT JOIN warehouse_transactions wt ON wt.material_id = m.id AND wt.warehouse_id = \\$1
-         WHERE m.id IN (SELECT DISTINCT material_id FROM warehouse_transactions WHERE warehouse_id = \\$1)
+         LEFT JOIN warehouse_transactions wt ON wt.material_id = m.id AND wt.warehouse_id = \$1
+         WHERE m.id IN (SELECT DISTINCT material_id FROM warehouse_transactions WHERE warehouse_id = \$1)
          GROUP BY m.id, m.name, m.unit
          ORDER BY m.name''',
       parameters: [warehouseId],
@@ -55,7 +55,7 @@ Future<Response> onRequest(RequestContext context, String id) async {
       '''SELECT wt.id, wt.material_id, m.name, wt.transaction_type, wt.quantity, wt.unit, wt.notes, wt.created_at
          FROM warehouse_transactions wt
          JOIN materials m ON m.id = wt.material_id
-         WHERE wt.warehouse_id = \\$1
+         WHERE wt.warehouse_id = \$1
          ORDER BY wt.created_at DESC
          LIMIT 20''',
       parameters: [warehouseId],
