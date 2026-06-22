@@ -23,6 +23,19 @@ Future<Response> onRequest(RequestContext context, String id) async {
     }
     final wh = whResult.first;
 
+    // Ombor turiga mos material turlari
+    final warehouseType = wh[2]?.toString() ?? '';
+    final materialTypes = {
+      'raw': ['raw'],
+      'purchased': ['purchased'],
+      'semi_finished': ['self_produced'],
+      'finished': ['self_produced'],
+      'sales': ['raw', 'purchased', 'self_produced'],
+    }[warehouseType] ?? ['raw', 'purchased', 'self_produced'];
+    final typePlaceholders = materialTypes.asMap().entries
+        .map((e) => '\$${e.key + 2}')
+        .join(', ');
+
     // Shu ombordagi har bir material boyicha jami kirim/chiqim
     final stockResult = await db.execute(
       '''SELECT
@@ -31,9 +44,10 @@ Future<Response> onRequest(RequestContext context, String id) async {
            COALESCE(SUM(CASE WHEN wt.transaction_type = 'out' THEN wt.quantity ELSE 0 END), 0) as total_out
          FROM materials m
          LEFT JOIN warehouse_transactions wt ON wt.material_id = m.id AND wt.warehouse_id = \$1
+         WHERE m.type IN ($typePlaceholders)
          GROUP BY m.id, m.name, m.unit
          ORDER BY m.name''',
-      parameters: [warehouseId],
+      parameters: [warehouseId, ...materialTypes],
     );
 
     final materials = stockResult.map((row) {
