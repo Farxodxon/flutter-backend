@@ -31,7 +31,6 @@ Future<Response> onRequest(RequestContext context, String id) async {
            COALESCE(SUM(CASE WHEN wt.transaction_type = 'out' THEN wt.quantity ELSE 0 END), 0) as total_out
          FROM materials m
          LEFT JOIN warehouse_transactions wt ON wt.material_id = m.id AND wt.warehouse_id = \$1
-         WHERE m.id IN (SELECT DISTINCT material_id FROM warehouse_transactions WHERE warehouse_id = \$1)
          GROUP BY m.id, m.name, m.unit
          ORDER BY m.name''',
       parameters: [warehouseId],
