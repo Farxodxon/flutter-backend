@@ -28,10 +28,10 @@ Future<Response> onRequest(RequestContext context, String id) async {
     final materialTypes = {
       'raw': ['raw'],
       'purchased': ['purchased'],
-      'semi_finished': ['self_produced'],
-      'finished': ['self_produced'],
-      'sales': ['raw', 'purchased', 'self_produced'],
-    }[warehouseType] ?? ['raw', 'purchased', 'self_produced'];
+      'semi_finished': ['semi_finished'],
+      'finished': ['finished'],
+      'sales': ['finished'],
+    }[warehouseType] ?? ['raw', 'purchased', 'semi_finished', 'finished'];
     final typePlaceholders = materialTypes.asMap().entries
         .map((e) => '\$${e.key + 2}')
         .join(', ');
